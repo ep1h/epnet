@@ -1,0 +1,13 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 80
+SortIncludes: false
+PointerAlignment: Left
+BreakBeforeBraces: Linux
+BreakAfterReturnType: None
+AllowShortFunctionsOnASingleLine: None
+# BinPackArguments: false
+# BinPackParameters: false
+AlignAfterOpenBracket: BlockIndent
