@@ -26,10 +26,10 @@ endif
 OS ?= linux
 
 ifeq ($(OS),windows)
-    STATIC_LIB := libnet.a
-    SHARED_LIB := net.dll
-    LDFLAGS    += -static
-    LDLIBS     := -lws2_32
+    CLIENT_STATIC := libepnet-client.a
+    CLIENT_SHARED := epnet-client.dll
+    LDFLAGS       += -static
+    LDLIBS        := -lws2_32
     ifneq ($(shell uname -s),Windows_NT)
         ifeq ($(origin CC),default)
             CC := $(MINGW_PREFIX)-gcc
@@ -39,10 +39,10 @@ ifeq ($(OS),windows)
         endif
     endif
 else ifeq ($(OS),linux)
-    CFLAGS     += -fPIC
-    STATIC_LIB := libnet.a
-    SHARED_LIB := libnet.so
-    LDLIBS     :=
+    CFLAGS        += -fPIC
+    CLIENT_STATIC := libepnet-client.a
+    CLIENT_SHARED := libepnet-client.so
+    LDLIBS        :=
     ifeq ($(ARCH),x86)
         CFLAGS  += -m32
         LDFLAGS += -m32
@@ -52,38 +52,51 @@ else
 endif
 
 # Directories
-SRC_DIR   := src/common
-BUILD_DIR := build/$(OS)-$(ARCH)-$(CFG)
-LIB_DIR   := $(BUILD_DIR)/lib
+INCLUDE_DIR := include
+COMMON_DIR  := src/common
+CLIENT_DIR  := src/client
+BUILD_DIR   := build/$(OS)-$(ARCH)-$(CFG)
+LIB_DIR     := $(BUILD_DIR)/lib
+
+# Internal headers live in src/common/
+INTERNAL_INCLUDES := -I$(INCLUDE_DIR) -I$(COMMON_DIR)
 
 # Sources
-SRCS := $(shell find $(SRC_DIR) -name '*.c')
-OBJS := $(patsubst %.c,$(BUILD_DIR)/obj/%.o,$(SRCS))
-DEPS := $(OBJS:.o=.d)
+COMMON_SRCS := $(shell find $(COMMON_DIR) -name '*.c')
+CLIENT_SRCS := $(shell find $(CLIENT_DIR) -name '*.c')
+
+COMMON_OBJS := $(patsubst %.c,$(BUILD_DIR)/obj/%.o,$(COMMON_SRCS))
+CLIENT_OBJS := $(patsubst %.c,$(BUILD_DIR)/obj/%.o,$(CLIENT_SRCS))
+
+DEPS := $(COMMON_OBJS:.o=.d) $(CLIENT_OBJS:.o=.d)
 
 # Targets
 .PHONY: all static shared clean distclean format help
 
 all: static shared
 
-static: $(LIB_DIR)/$(STATIC_LIB)
+static: $(LIB_DIR)/$(CLIENT_STATIC)
 
-shared: $(LIB_DIR)/$(SHARED_LIB)
+shared: $(LIB_DIR)/$(CLIENT_SHARED)
 
 # Static library
-$(LIB_DIR)/$(STATIC_LIB): $(OBJS)
+$(LIB_DIR)/$(CLIENT_STATIC): $(COMMON_OBJS) $(CLIENT_OBJS)
 	@mkdir -p $(LIB_DIR)
 	$(AR) rcs $@ $^
 
 # Shared library
-$(LIB_DIR)/$(SHARED_LIB): $(OBJS)
+$(LIB_DIR)/$(CLIENT_SHARED): $(COMMON_OBJS) $(CLIENT_OBJS)
 	@mkdir -p $(LIB_DIR)
 	$(CC) -shared $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 # Object rules
-$(BUILD_DIR)/obj/%.o: %.c
+$(BUILD_DIR)/obj/src/common/%.o: $(COMMON_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(SRC_DIR) -MMD -MP -c $< -o $@
+	$(CC) $(CFLAGS) $(INTERNAL_INCLUDES) -MMD -MP -c $< -o $@
+
+$(BUILD_DIR)/obj/src/client/%.o: $(CLIENT_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INTERNAL_INCLUDES) -MMD -MP -c $< -o $@
 
 -include $(DEPS)
 
@@ -94,21 +107,24 @@ distclean:
 	rm -rf build
 
 format:
-	find src -name '*.[ch]' -exec clang-format -i {} +
+	find src $(INCLUDE_DIR) -name '*.[ch]' -exec clang-format -i {} +
 
 help:
-	@echo "net library build system"
+	@echo "epnet library build system"
 	@echo ""
 	@echo "Usage: make [TARGET] [OPTIONS]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all        Build static and shared libraries (default)"
-	@echo "  static     Build static library"
-	@echo "  shared     Build shared library"
+	@echo "  all        Build all static and shared libraries (default)"
+	@echo "  static     Build static libraries"
+	@echo "  shared     Build shared libraries"
 	@echo "  clean      Remove build artifacts for current configuration"
 	@echo "  distclean  Remove all build artifacts"
 	@echo "  format     Run clang-format on all sources"
 	@echo "  help       Show this message"
+	@echo ""
+	@echo "Libraries:"
+	@echo "  libepnet-client  Common + client networking"
 	@echo ""
 	@echo "Options:"
 	@echo "  CFG=debug|release  Build configuration (default: debug)"
