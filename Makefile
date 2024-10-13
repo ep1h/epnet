@@ -28,6 +28,8 @@ OS ?= linux
 ifeq ($(OS),windows)
     CLIENT_STATIC := libepnet-client.a
     CLIENT_SHARED := epnet-client.dll
+    SERVER_STATIC := libepnet-server.a
+    SERVER_SHARED := epnet-server.dll
     LDFLAGS       += -static
     LDLIBS        := -lws2_32
     ifneq ($(shell uname -s),Windows_NT)
@@ -42,6 +44,8 @@ else ifeq ($(OS),linux)
     CFLAGS        += -fPIC
     CLIENT_STATIC := libepnet-client.a
     CLIENT_SHARED := libepnet-client.so
+    SERVER_STATIC := libepnet-server.a
+    SERVER_SHARED := libepnet-server.so
     LDLIBS        :=
     ifeq ($(ARCH),x86)
         CFLAGS  += -m32
@@ -55,6 +59,7 @@ endif
 INCLUDE_DIR := include
 COMMON_DIR  := src/common
 CLIENT_DIR  := src/client
+SERVER_DIR  := src/server
 BUILD_DIR   := build/$(OS)-$(ARCH)-$(CFG)
 LIB_DIR     := $(BUILD_DIR)/lib
 
@@ -64,28 +69,38 @@ INTERNAL_INCLUDES := -I$(INCLUDE_DIR) -I$(COMMON_DIR)
 # Sources
 COMMON_SRCS := $(shell find $(COMMON_DIR) -name '*.c')
 CLIENT_SRCS := $(shell find $(CLIENT_DIR) -name '*.c')
+SERVER_SRCS := $(shell find $(SERVER_DIR) -name '*.c')
 
 COMMON_OBJS := $(patsubst %.c,$(BUILD_DIR)/obj/%.o,$(COMMON_SRCS))
 CLIENT_OBJS := $(patsubst %.c,$(BUILD_DIR)/obj/%.o,$(CLIENT_SRCS))
+SERVER_OBJS := $(patsubst %.c,$(BUILD_DIR)/obj/%.o,$(SERVER_SRCS))
 
-DEPS := $(COMMON_OBJS:.o=.d) $(CLIENT_OBJS:.o=.d)
+DEPS := $(COMMON_OBJS:.o=.d) $(CLIENT_OBJS:.o=.d) $(SERVER_OBJS:.o=.d)
 
 # Targets
 .PHONY: all static shared clean distclean format help
 
 all: static shared
 
-static: $(LIB_DIR)/$(CLIENT_STATIC)
+static: $(LIB_DIR)/$(CLIENT_STATIC) $(LIB_DIR)/$(SERVER_STATIC)
 
-shared: $(LIB_DIR)/$(CLIENT_SHARED)
+shared: $(LIB_DIR)/$(CLIENT_SHARED) $(LIB_DIR)/$(SERVER_SHARED)
 
-# Static library
+# Static libraries
 $(LIB_DIR)/$(CLIENT_STATIC): $(COMMON_OBJS) $(CLIENT_OBJS)
 	@mkdir -p $(LIB_DIR)
 	$(AR) rcs $@ $^
 
-# Shared library
+$(LIB_DIR)/$(SERVER_STATIC): $(COMMON_OBJS) $(SERVER_OBJS)
+	@mkdir -p $(LIB_DIR)
+	$(AR) rcs $@ $^
+
+# Shared libraries
 $(LIB_DIR)/$(CLIENT_SHARED): $(COMMON_OBJS) $(CLIENT_OBJS)
+	@mkdir -p $(LIB_DIR)
+	$(CC) -shared $^ -o $@ $(LDFLAGS) $(LDLIBS)
+
+$(LIB_DIR)/$(SERVER_SHARED): $(COMMON_OBJS) $(SERVER_OBJS)
 	@mkdir -p $(LIB_DIR)
 	$(CC) -shared $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
@@ -95,6 +110,10 @@ $(BUILD_DIR)/obj/src/common/%.o: $(COMMON_DIR)/%.c
 	$(CC) $(CFLAGS) $(INTERNAL_INCLUDES) -MMD -MP -c $< -o $@
 
 $(BUILD_DIR)/obj/src/client/%.o: $(CLIENT_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INTERNAL_INCLUDES) -MMD -MP -c $< -o $@
+
+$(BUILD_DIR)/obj/src/server/%.o: $(SERVER_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INTERNAL_INCLUDES) -MMD -MP -c $< -o $@
 
@@ -125,6 +144,7 @@ help:
 	@echo ""
 	@echo "Libraries:"
 	@echo "  libepnet-client  Common + client networking"
+	@echo "  libepnet-server  Common + server networking"
 	@echo ""
 	@echo "Options:"
 	@echo "  CFG=debug|release  Build configuration (default: debug)"
